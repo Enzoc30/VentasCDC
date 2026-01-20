@@ -4,31 +4,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validador de Registros SUNAT</title>
+    <title>Validador de Ventas - CDC</title>
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
-<body class="bg-gray-100 min-h-screen p-8">
-    <div class="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow-xl">
-        <h1 class="text-2xl font-bold mb-4 text-blue-600">Procesador de Observaciones Excel</h1>
-        <p class="mb-6 text-gray-600">Sube tu archivo <code class="bg-gray-200 px-1">R.V.12.2025.xlsx</code> para
-            generar la hoja de observaciones.</p>
+<body class="bg-slate-100 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg border-t-4 border-blue-600">
+        <h1 class="text-3xl font-extrabold text-slate-800 mb-2">Validador CDC</h1>
+        <p class="text-slate-500 mb-8 text-sm">Procesa tu Registro de Ventas para encontrar faltantes y series
+            completas.</p>
 
-        <div class="border-2 border-dashed border-gray-300 p-8 text-center rounded-lg mb-4">
-            <input type="file" id="file-upload" class="mb-4" accept=".xlsx">
+        <div class="space-y-6">
+            <div
+                class="group relative border-2 border-dashed border-slate-300 rounded-xl p-8 transition-all hover:border-blue-400">
+                <input type="file" id="file-upload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    accept=".xlsx">
+                <div class="text-center" id="upload-label">
+                    <p class="text-slate-600 font-medium">Haz clic o arrastra tu Excel aquí</p>
+                    <p class="text-slate-400 text-xs mt-1">Soporta archivos .xlsx pesados</p>
+                </div>
+            </div>
+
             <button id="process-btn"
-                class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded hidden">
-                Procesar y Descargar
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all transform hover:scale-[1.02] active:scale-95 hidden">
+                Generar Reporte de Observaciones
             </button>
+
+            <div id="status"
+                class="hidden animate-pulse flex items-center justify-center space-x-2 text-blue-600 font-semibold italic">
+                <span>Procesando datos...</span>
+            </div>
         </div>
 
-        <div id="output" class="text-sm text-gray-700 mt-4 p-4 bg-gray-50 rounded hidden"></div>
+        <div id="output-log" class="mt-6 text-xs text-slate-400 font-mono overflow-auto max-h-32"></div>
     </div>
 
     <py-config>
-        packages = ["pandas", "openpyxl", "re"]
+        packages = ["pandas", "openpyxl"]
     </py-config>
 
     <script type="py">
@@ -42,23 +56,23 @@
         @when("change", "#file-upload")
         async def file_selected(event):
             document.getElementById("process-btn").classList.remove("hidden")
+            document.getElementById("upload-label").innerHTML = "<p class='text-green-600 font-bold'>✓ Archivo cargado</p>"
 
         @when("click", "#process-btn")
         async def run_process(event):
-            output_div = document.getElementById("output")
-            output_div.classList.remove("hidden")
-            output_div.innerHTML = "Procesando... por favor espera."
+            status = document.getElementById("status")
+            status.classList.remove("hidden")
             
             file_list = document.getElementById("file-upload").files
             if len(file_list) == 0: return
             
-            # Leer archivo
             file = file_list.item(0)
             array_buffer = await file.arrayBuffer()
             content = array_buffer.to_py()
             
-            # 1. LÓGICA DE TU CÓDIGO
+            # --- LÓGICA DE PROCESAMIENTO ---
             input_io = io.BytesIO(content)
+            # Leemos solo lo necesario para el análisis inicial
             df = pd.read_excel(input_io, header=10)
             df.columns = df.columns.str.replace('\n', ' ').str.strip()
 
@@ -101,29 +115,53 @@
                         for f in faltantes:
                             observaciones.append({"NIVEL": "NÚMERO", "TIPO": tipo, "DESCRIPCION": nombre_t, "DETALLE": "Falta correlativo", "SERIE": serie, "NUMERO": f})
 
-            # 2. GUARDAR (Preservando original)
+            # --- GENERAR SALIDA PRESERVANDO HOJA 1 ---
             output_io = io.BytesIO()
-            # Para preservar el original en la web, cargamos el original y añadimos la hoja
             input_io.seek(0)
-            with pd.ExcelWriter(output_io, engine='openpyxl') as writer:
-                # Escribimos el original de nuevo (en la web es más fácil reconstruir las hojas necesarias)
-                pd.read_excel(input_io).to_excel(writer, sheet_name='Hoja1', index=False)
-                pd.DataFrame(observaciones).to_excel(writer, sheet_name='OBSERVACIONES', index=False)
-                pd.DataFrame(completos).to_excel(writer, sheet_name='OBSERVACIONES', startcol=7, startrow=3, index=False)
+            
+            # Cargamos el workbook original completo para no perder la Hoja 1
+            wb = openpyxl.load_workbook(input_io)
+            
+            # Creamos o reemplazamos la hoja de OBSERVACIONES
+            if 'OBSERVACIONES' in wb.sheetnames:
+                del wb['OBSERVACIONES']
+            ws_obs = wb.create_sheet('OBSERVACIONES')
+            
+            # Escribir encabezados de Observaciones
+            headers_obs = ["NIVEL", "TIPO", "DESCRIPCION", "DETALLE", "SERIE", "NUMERO"]
+            for col_num_idx, header in enumerate(headers_obs, 1):
+                ws_obs.cell(row=1, column=col_num_idx, value=header)
+            
+            # Escribir datos de Observaciones
+            for row_idx, obs in enumerate(observaciones, 2):
+                for col_idx, key in enumerate(headers_obs, 1):
+                    ws_obs.cell(row=row_idx, column=col_idx, value=obs.get(key))
 
-            # 3. DESCARGAR
-            output_div.innerHTML = "¡Listo! Descargando archivo..."
+            # Escribir encabezados de Completas en Columna H (8), Fila 4
+            headers_comp = ["TIPO_OK", "DOC_OK", "SERIE_COMPLETA", "RANGO"]
+            for col_num_idx, header in enumerate(headers_comp, 8):
+                ws_obs.cell(row=4, column=col_num_idx, value=header)
+            
+            # Escribir datos de Completas
+            for row_idx, comp in enumerate(completos, 5):
+                for col_idx, key in enumerate(headers_comp, 8):
+                    ws_obs.cell(row=row_idx, column=col_idx, value=comp.get(key))
+
+            wb.save(output_io)
+            
+            # --- DESCARGA AUTOMÁTICA ---
             content_out = output_io.getvalue()
             out_array = Uint8Array.new(len(content_out))
             out_array.assign(content_out)
             
-            blob = File.new([out_array], "Reporte_Observaciones.xlsx", { "type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+            blob = File.new([out_array], "Reporte_Final_CDC.xlsx", { "type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
             url = URL.createObjectURL(blob)
             
             link = document.createElement("a")
             link.href = url
-            link.download = "Reporte_Ventas_Analizado.xlsx"
+            link.download = "Reporte_Analizado_CDC.xlsx"
             link.click()
+            status.innerHTML = "¡Proceso Exitoso!"
     </script>
 </body>
 

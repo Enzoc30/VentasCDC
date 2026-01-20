@@ -4,126 +4,381 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validador de Registros SUNAT</title>
-    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
-    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>AutoContaLabs - Procesador Final</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-color: #f3f4f6;
+            --text-dark: #111827;
+            --text-gray: #6b7280;
+            --card-radius: 24px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--text-dark);
+        }
+
+        .dashboard-card {
+            background: white;
+            width: 100%;
+            max-width: 520px;
+            padding: 40px;
+            border-radius: var(--card-radius);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+            text-align: center;
+            animation: floatUp 0.6s ease-out;
+        }
+
+        .icon-header {
+            background: #eff6ff;
+            color: var(--primary);
+            width: 64px;
+            height: 64px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px auto;
+            font-size: 32px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        p.subtitle {
+            color: var(--text-gray);
+            font-size: 14px;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+
+        .upload-zone {
+            border: 2px dashed #e5e7eb;
+            border-radius: 16px;
+            padding: 30px 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            background: #fafafa;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--primary);
+            background: #eff6ff;
+        }
+
+        .upload-zone input {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .upload-content i {
+            font-size: 28px;
+            color: #9ca3af;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .upload-content span {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-gray);
+        }
+
+        .file-selected {
+            color: var(--primary) !important;
+            font-weight: 600 !important;
+        }
+
+        .btn-process {
+            background-color: var(--primary);
+            color: white;
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 16px;
+            font-size: 16px;
+            font-weight: 600;
+            margin-top: 24px;
+            cursor: pointer;
+            transition: transform 0.1s, background-color 0.2s;
+            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+        }
+
+        .btn-process:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-process:active {
+            transform: translateY(1px);
+        }
+
+        .btn-process:disabled {
+            background-color: #cbd5e1;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .status-msg {
+            margin-top: 20px;
+            font-size: 13px;
+            padding: 12px;
+            border-radius: 12px;
+            display: none;
+        }
+
+        .status-loading {
+            background: #eff6ff;
+            color: var(--primary);
+            display: block;
+        }
+
+        .status-success {
+            background: #dcfce7;
+            color: #166534;
+            display: block;
+        }
+
+        .status-error {
+            background: #fee2e2;
+            color: #991b1b;
+            display: block;
+        }
+
+        @keyframes floatUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
 </head>
 
-<body class="bg-gray-100 min-h-screen p-8">
-    <div class="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow-xl">
-        <h1 class="text-2xl font-bold mb-4 text-blue-600">Procesador de Observaciones Excel</h1>
-        <p class="mb-6 text-gray-600">Sube tu archivo <code class="bg-gray-200 px-1">R.V.12.2025.xlsx</code> para
-            generar la hoja de observaciones.</p>
+<body>
 
-        <div class="border-2 border-dashed border-gray-300 p-8 text-center rounded-lg mb-4">
-            <input type="file" id="file-upload" class="mb-4" accept=".xlsx">
-            <button id="process-btn"
-                class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded hidden">
-                Procesar y Descargar
-            </button>
+    <div class="dashboard-card">
+        <div class="icon-header">
+            <i class="ph ph-file-xls"></i>
         </div>
 
-        <div id="output" class="text-sm text-gray-700 mt-4 p-4 bg-gray-50 rounded hidden"></div>
+        <h1>AutoContaLabs</h1>
+        <p class="subtitle">Mapeo de Ventas + Validación de Correlativos</p>
+
+        <div class="upload-zone" id="dropZone">
+            <div class="upload-content">
+                <i class="ph ph-cloud-arrow-up" id="uploadIcon"></i>
+                <span id="uploadText">Haz clic para subir tu Excel (Ventas)</span>
+            </div>
+            <input type="file" id="inputFile" accept=".xlsx, .xls" onchange="actualizarNombreArchivo()">
+        </div>
+
+        <button class="btn-process" id="btnProcess" onclick="procesarCompleto()">
+            Procesar y Descargar Reporte
+        </button>
+
+        <div id="statusArea" class="status-msg"></div>
     </div>
 
-    <py-config>
-        packages = ["pandas", "openpyxl", "re"]
-    </py-config>
+    <script>
+        function actualizarNombreArchivo() {
+            const input = document.getElementById('inputFile');
+            const text = document.getElementById('uploadText');
+            const icon = document.getElementById('uploadIcon');
 
-    <script type="py">
-        from pyscript import display, when
-        import pandas as pd
-        import re
-        import io
-        from js import Uint8Array, File, URL, document
-        import openpyxl
+            if (input.files.length > 0) {
+                text.innerText = input.files[0].name;
+                text.classList.add('file-selected');
+                icon.className = "ph ph-check-circle";
+                icon.style.color = "var(--primary)";
+            }
+        }
 
-        @when("change", "#file-upload")
-        async def file_selected(event):
-            document.getElementById("process-btn").classList.remove("hidden")
+        function mostrarMensaje(texto, tipo) {
+            const status = document.getElementById('statusArea');
+            status.innerText = texto;
+            status.className = 'status-msg ' + tipo;
+        }
 
-        @when("click", "#process-btn")
-        async def run_process(event):
-            output_div = document.getElementById("output")
-            output_div.classList.remove("hidden")
-            output_div.innerHTML = "Procesando... por favor espera."
-            
-            file_list = document.getElementById("file-upload").files
-            if len(file_list) == 0: return
-            
-            # Leer archivo
-            file = file_list.item(0)
-            array_buffer = await file.arrayBuffer()
-            content = array_buffer.to_py()
-            
-            # 1. LÓGICA DE TU CÓDIGO
-            input_io = io.BytesIO(content)
-            df = pd.read_excel(input_io, header=10)
-            df.columns = df.columns.str.replace('\n', ' ').str.strip()
+        async function procesarCompleto() {
+            const fileInput = document.getElementById('inputFile');
+            if (fileInput.files.length === 0) {
+                mostrarMensaje("Por favor, selecciona un archivo.", "status-error");
+                return;
+            }
 
-            nombres_doc = {"01": "FACTURA", "03": "BOLETA DE VENTA", "07": "NOTA DE CRÉDITO"}
-            col_tipo, col_serie, col_num = df.columns[3], df.columns[4], df.columns[5]
+            mostrarMensaje("Procesando datos...", "status-loading");
+            const file = fileInput.files[0];
+            const reader = new FileReader();
 
-            df = df[df[col_tipo].astype(str).str.match(r'^0\d+$', na=False)].copy()
-            df[col_num] = pd.to_numeric(df[col_num], errors='coerce')
-            df = df.dropna(subset=[col_num])
-            df[col_num] = df[col_num].astype(int)
+            reader.onload = async (e) => {
+                try {
+                    const arrayBuffer = e.target.result;
+                    const workbook = new ExcelJS.Workbook();
+                    await workbook.xlsx.load(arrayBuffer);
 
-            observaciones, completos = [], []
-            tipos_unicos = sorted(df[col_tipo].unique())
+                    const sheet = workbook.worksheets[0];
+                    const data = [];
 
-            for tipo in tipos_unicos:
-                nombre_t = nombres_doc.get(str(tipo), "OTRO")
-                df_tipo = df[df[col_tipo] == tipo]
-                series_existentes = sorted(df_tipo[col_serie].unique())
+                    // Nombres de documentos según lógica original
+                    const nombresDoc = { "01": "FACTURA", "03": "BOLETA DE VENTA", "07": "NOTA DE CRÉDITO" };
 
-                if series_existentes:
-                    match_pref = re.match(r'([A-Z]+)(\d+)', str(series_existentes[0]))
-                    if match_pref:
-                        pref = match_pref.group(1)
-                        nums_s = [int(re.search(r'\d+', s).group()) for s in series_existentes]
-                        for i in range(min(nums_s), max(nums_s) + 1):
-                            s_teorica = f"{pref}{str(i).zfill(2)}"
-                            if s_teorica not in series_existentes:
-                                observaciones.append({"NIVEL": "SERIE", "TIPO": tipo, "DESCRIPCION": nombre_t, "DETALLE": "Falta serie completa", "SERIE": s_teorica, "NUMERO": "N/A"})
+                    // 1. Cargar Datos (Header 10 -> Fila 11 en ExcelJS)
+                    // Las columnas originales son D (4), E (5), F (6)
+                    sheet.eachRow((row, rowNumber) => {
+                        if (rowNumber > 11) {
+                            data.push({
+                                tipo: String(row.getCell(4).value || "").trim(),
+                                serie: String(row.getCell(5).value || "").trim(),
+                                numero: parseInt(row.getCell(6).value)
+                            });
+                        }
+                    });
 
-                for serie in series_existentes:
-                    df_serie = df_tipo[df_tipo[col_serie] == serie].sort_values(by=col_num)
-                    numeros = df_serie[col_num].tolist()
-                    min_n, max_n = min(numeros), max(numeros)
-                    set_n = set(numeros)
-                    faltantes = [n for n in range(min_n, max_n + 1) if n not in set_n]
-                    
-                    if not faltantes:
-                        completos.append({"TIPO_OK": tipo, "DOC_OK": nombre_t, "SERIE_COMPLETA": serie, "RANGO": f"{min_n} al {max_n}"})
-                    else:
-                        for f in faltantes:
-                            observaciones.append({"NIVEL": "NÚMERO", "TIPO": tipo, "DESCRIPCION": nombre_t, "DETALLE": "Falta correlativo", "SERIE": serie, "NUMERO": f})
+                    // 2. Filtrar como en Python: r'^0\d+$' y No Nulos
+                    let df = data.filter(d => /^0\d+$/.test(d.tipo) && !isNaN(d.numero));
 
-            # 2. GUARDAR (Preservando original)
-            output_io = io.BytesIO()
-            # Para preservar el original en la web, cargamos el original y añadimos la hoja
-            input_io.seek(0)
-            with pd.ExcelWriter(output_io, engine='openpyxl') as writer:
-                # Escribimos el original de nuevo (en la web es más fácil reconstruir las hojas necesarias)
-                pd.read_excel(input_io).to_excel(writer, sheet_name='Hoja1', index=False)
-                pd.DataFrame(observaciones).to_excel(writer, sheet_name='OBSERVACIONES', index=False)
-                pd.DataFrame(completos).to_excel(writer, sheet_name='OBSERVACIONES', startcol=7, startrow=3, index=False)
+                    const observaciones = [];
+                    const completos = [];
 
-            # 3. DESCARGAR
-            output_div.innerHTML = "¡Listo! Descargando archivo..."
-            content_out = output_io.getvalue()
-            out_array = Uint8Array.new(len(content_out))
-            out_array.assign(content_out)
-            
-            blob = File.new([out_array], "Reporte_Observaciones.xlsx", { "type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
-            url = URL.createObjectURL(blob)
-            
-            link = document.createElement("a")
-            link.href = url
-            link.download = "Reporte_Ventas_Analizado.xlsx"
-            link.click()
+                    // 3. Tipos Únicos
+                    const tiposUnicos = [...new Set(df.map(d => d.tipo))].sort();
+
+                    tiposUnicos.forEach(tipo => {
+                        const nombreT = nombresDoc[tipo] || "OTRO";
+                        const dfTipo = df.filter(d => d.tipo === tipo);
+                        const seriesExistentes = [...new Set(dfTipo.map(d => d.serie))].sort();
+
+                        // Validar Saltos de Series
+                        if (seriesExistentes.length > 0) {
+                            const matchPref = seriesExistentes[0].match(/([A-Z]+)(\d+)/);
+                            if (matchPref) {
+                                const pref = matchPref[1];
+                                const numsS = seriesExistentes.map(s => {
+                                    const m = s.match(/\d+/);
+                                    return m ? parseInt(m[0]) : null;
+                                }).filter(n => n !== null);
+
+                                const minS = Math.min(...numsS);
+                                const maxS = Math.max(...numsS);
+
+                                for (let i = minS; i <= maxS; i++) {
+                                    const sTeorica = pref + String(i).padStart(2, '0');
+                                    if (!seriesExistentes.includes(sTeorica)) {
+                                        observaciones.append
+                                        observaciones.push({
+                                            NIVEL: "SERIE", TIPO: tipo, DESCRIPCION: nombreT,
+                                            DETALLE: "Falta serie completa", SERIE: sTeorica, NUMERO: "N/A"
+                                        });
+                                    }
+                                }
+                            }
+                        }
+
+                        // Validar Saltos de Números
+                        seriesExistentes.forEach(serie => {
+                            const dfSerie = dfTipo.filter(d => d.serie === serie).sort((a, b) => a.numero - b.numero);
+                            const numeros = dfSerie.map(d => d.numero);
+                            const minN = Math.min(...numeros);
+                            const maxN = Math.max(...numeros);
+                            const setN = new Set(numeros);
+
+                            let faltantes = [];
+                            for (let n = minN; n <= maxN; n++) {
+                                if (!setN.has(n)) faltantes.push(n);
+                            }
+
+                            if (faltantes.length === 0) {
+                                completos.push({
+                                    TIPO_OK: tipo, DOC_OK: nombreT, SERIE_COMPLETA: serie, RANGO: `${minN} al ${maxN}`
+                                });
+                            } else {
+                                faltantes.forEach(f => {
+                                    observaciones.push({
+                                        NIVEL: "NÚMERO", TIPO: tipo, DESCRIPCION: nombreT,
+                                        DETALLE: "Falta correlativo", SERIE: serie, NUMERO: f
+                                    });
+                                });
+                            }
+                        });
+                    });
+
+                    // 4. Generar Nuevo Excel (ExcelWriter alternativo)
+                    const outWorkbook = new ExcelJS.Workbook();
+                    const outSheet = outWorkbook.addWorksheet('OBSERVACIONES');
+
+                    // Escribir Tabla Observaciones (A1)
+                    const headerObs = ["NIVEL", "TIPO", "DESCRIPCION", "DETALLE", "SERIE", "NUMERO"];
+                    outSheet.addRow(headerObs);
+                    observaciones.forEach(obs => {
+                        outSheet.addRow([obs.NIVEL, obs.TIPO, obs.DESCRIPCION, obs.DETALLE, obs.SERIE, obs.NUMERO]);
+                    });
+
+                    // Escribir Tabla Completos (Columna H = 8, Fila 4 = startrow 3)
+                    const startColComp = 8;
+                    const startRowComp = 4;
+                    const headerComp = ["TIPO_OK", "DOC_OK", "SERIE_COMPLETA", "RANGO"];
+
+                    headerComp.forEach((h, idx) => {
+                        outSheet.getCell(startRowComp, startColComp + idx).value = h;
+                    });
+
+                    completos.forEach((comp, rowIdx) => {
+                        const r = startRowComp + 1 + rowIdx;
+                        outSheet.getCell(r, startColComp).value = comp.TIPO_OK;
+                        outSheet.getCell(r, startColComp + 1).value = comp.DOC_OK;
+                        outSheet.getCell(r, startColComp + 2).value = comp.SERIE_COMPLETA;
+                        outSheet.getCell(r, startColComp + 3).value = comp.RANGO;
+                    });
+
+                    // Guardar
+                    const buffer = await outWorkbook.xlsx.writeBuffer();
+                    saveAs(new Blob([buffer]), "Reporte_Ventas_Jerarquico.xlsx");
+                    mostrarMensaje("¡Proceso completado con éxito!", "status-success");
+
+                } catch (err) {
+                    console.error(err);
+                    mostrarMensaje("Error procesando el archivo. Verifica el formato.", "status-error");
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
     </script>
 </body>
 

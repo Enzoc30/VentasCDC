@@ -4,164 +4,164 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validador de Ventas - CDC</title>
-    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
-    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+    <title>Validador CDC - JavaScript</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 </head>
 
 <body class="bg-slate-100 min-h-screen flex items-center justify-center p-4">
-    <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg border-t-4 border-blue-600">
-        <h1 class="text-3xl font-extrabold text-slate-800 mb-2">Validador CDC</h1>
-        <p class="text-slate-500 mb-8 text-sm">Procesa tu Registro de Ventas para encontrar faltantes y series
-            completas.</p>
+    <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg border-t-4 border-green-600">
+        <h1 class="text-3xl font-extrabold text-slate-800 mb-2">Validador CDC (JS)</h1>
+        <p class="text-slate-500 mb-8 text-sm">Versión ultra rápida en JavaScript. Los datos no salen de tu navegador.
+        </p>
 
         <div class="space-y-6">
             <div
-                class="group relative border-2 border-dashed border-slate-300 rounded-xl p-8 transition-all hover:border-blue-400">
+                class="group relative border-2 border-dashed border-slate-300 rounded-xl p-8 transition-all hover:border-green-400 text-center">
                 <input type="file" id="file-upload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     accept=".xlsx">
-                <div class="text-center" id="upload-label">
-                    <p class="text-slate-600 font-medium">Haz clic o arrastra tu Excel aquí</p>
-                    <p class="text-slate-400 text-xs mt-1">Soporta archivos .xlsx pesados</p>
+                <div id="upload-label">
+                    <p class="text-slate-600 font-medium text-lg">📁 Selecciona tu archivo Excel</p>
+                    <p class="text-slate-400 text-xs mt-1">Se procesará localmente al instante</p>
                 </div>
             </div>
 
-            <button id="process-btn"
-                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all transform hover:scale-[1.02] active:scale-95 hidden">
-                Generar Reporte de Observaciones
-            </button>
-
             <div id="status"
-                class="hidden animate-pulse flex items-center justify-center space-x-2 text-blue-600 font-semibold italic">
-                <span>Procesando datos...</span>
+                class="hidden text-center py-2 px-4 bg-blue-50 text-blue-700 rounded-lg text-sm font-semibold animate-pulse">
+                Procesando correlativos...
+            </div>
+
+            <div id="result-area" class="hidden">
+                <button id="download-btn"
+                    class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg">
+                    Descargar Reporte de Observaciones
+                </button>
             </div>
         </div>
-
-        <div id="output-log" class="mt-6 text-xs text-slate-400 font-mono overflow-auto max-h-32"></div>
     </div>
 
-    <py-config>
-        packages = ["pandas", "openpyxl"]
-    </py-config>
+    <script>
+        const fileInput = document.getElementById('file-upload');
+        const status = document.getElementById('status');
+        const resultArea = document.getElementById('result-area');
+        const downloadBtn = document.getElementById('download-btn');
+        let processedWorkbook = null;
 
-    <script type="py">
-        from pyscript import display, when
-        import pandas as pd
-        import re
-        import io
-        from js import Uint8Array, File, URL, document
-        import openpyxl
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
 
-        @when("change", "#file-upload")
-        async def file_selected(event):
-            document.getElementById("process-btn").classList.remove("hidden")
-            document.getElementById("upload-label").innerHTML = "<p class='text-green-600 font-bold'>✓ Archivo cargado</p>"
+            status.classList.remove('hidden');
+            resultArea.classList.add('hidden');
 
-        @when("click", "#process-btn")
-        async def run_process(event):
-            status = document.getElementById("status")
-            status.classList.remove("hidden")
-            
-            file_list = document.getElementById("file-upload").files
-            if len(file_list) == 0: return
-            
-            file = file_list.item(0)
-            array_buffer = await file.arrayBuffer()
-            content = array_buffer.to_py()
-            
-            # --- LÓGICA DE PROCESAMIENTO ---
-            input_io = io.BytesIO(content)
-            # Leemos solo lo necesario para el análisis inicial
-            df = pd.read_excel(input_io, header=10)
-            df.columns = df.columns.str.replace('\n', ' ').str.strip()
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
 
-            nombres_doc = {"01": "FACTURA", "03": "BOLETA DE VENTA", "07": "NOTA DE CRÉDITO"}
-            col_tipo, col_serie, col_num = df.columns[3], df.columns[4], df.columns[5]
+                // 1. Obtener la primera hoja y convertir a JSON
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
 
-            df = df[df[col_tipo].astype(str).str.match(r'^0\d+$', na=False)].copy()
-            df[col_num] = pd.to_numeric(df[col_num], errors='coerce')
-            df = df.dropna(subset=[col_num])
-            df[col_num] = df[col_num].astype(int)
+                // Empezamos desde la fila 11 (header=10 en python es index 10 aquí)
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 10 });
 
-            observaciones, completos = [], []
-            tipos_unicos = sorted(df[col_tipo].unique())
+                const nombresDoc = { "01": "FACTURA", "03": "BOLETA DE VENTA", "07": "NOTA DE CRÉDITO" };
+                const observaciones = [];
+                const completos = [];
 
-            for tipo in tipos_unicos:
-                nombre_t = nombres_doc.get(str(tipo), "OTRO")
-                df_tipo = df[df[col_tipo] == tipo]
-                series_existentes = sorted(df_tipo[col_serie].unique())
+                // 2. Agrupar datos por Tipo (Col D / Index 3) y Serie (Col E / Index 4)
+                // Filtrar solo tipos que empiecen con "0"
+                const rawRows = jsonData.filter(row => row[3] && String(row[3]).match(/^0\d+$/));
 
-                if series_existentes:
-                    match_pref = re.match(r'([A-Z]+)(\d+)', str(series_existentes[0]))
-                    if match_pref:
-                        pref = match_pref.group(1)
-                        nums_s = [int(re.search(r'\d+', s).group()) for s in series_existentes]
-                        for i in range(min(nums_s), max(nums_s) + 1):
-                            s_teorica = f"{pref}{str(i).zfill(2)}"
-                            if s_teorica not in series_existentes:
-                                observaciones.append({"NIVEL": "SERIE", "TIPO": tipo, "DESCRIPCION": nombre_t, "DETALLE": "Falta serie completa", "SERIE": s_teorica, "NUMERO": "N/A"})
+                const groupedData = {};
+                rawRows.forEach(row => {
+                    const tipo = String(row[3]);
+                    const serie = String(row[4]);
+                    const num = parseInt(row[5]);
 
-                for serie in series_existentes:
-                    df_serie = df_tipo[df_tipo[col_serie] == serie].sort_values(by=col_num)
-                    numeros = df_serie[col_num].tolist()
-                    min_n, max_n = min(numeros), max(numeros)
-                    set_n = set(numeros)
-                    faltantes = [n for n in range(min_n, max_n + 1) if n not in set_n]
-                    
-                    if not faltantes:
-                        completos.append({"TIPO_OK": tipo, "DOC_OK": nombre_t, "SERIE_COMPLETA": serie, "RANGO": f"{min_n} al {max_n}"})
-                    else:
-                        for f in faltantes:
-                            observaciones.append({"NIVEL": "NÚMERO", "TIPO": tipo, "DESCRIPCION": nombre_t, "DETALLE": "Falta correlativo", "SERIE": serie, "NUMERO": f})
+                    if (!isNaN(num)) {
+                        if (!groupedData[tipo]) groupedData[tipo] = {};
+                        if (!groupedData[tipo][serie]) groupedData[tipo][serie] = [];
+                        groupedData[tipo][serie].push(num);
+                    }
+                });
 
-            # --- GENERAR SALIDA PRESERVANDO HOJA 1 ---
-            output_io = io.BytesIO()
-            input_io.seek(0)
-            
-            # Cargamos el workbook original completo para no perder la Hoja 1
-            wb = openpyxl.load_workbook(input_io)
-            
-            # Creamos o reemplazamos la hoja de OBSERVACIONES
-            if 'OBSERVACIONES' in wb.sheetnames:
-                del wb['OBSERVACIONES']
-            ws_obs = wb.create_sheet('OBSERVACIONES')
-            
-            # Escribir encabezados de Observaciones
-            headers_obs = ["NIVEL", "TIPO", "DESCRIPCION", "DETALLE", "SERIE", "NUMERO"]
-            for col_num_idx, header in enumerate(headers_obs, 1):
-                ws_obs.cell(row=1, column=col_num_idx, value=header)
-            
-            # Escribir datos de Observaciones
-            for row_idx, obs in enumerate(observaciones, 2):
-                for col_idx, key in enumerate(headers_obs, 1):
-                    ws_obs.cell(row=row_idx, column=col_idx, value=obs.get(key))
+                // 3. Lógica de validación
+                Object.keys(groupedData).sort().forEach(tipo => {
+                    const descTipo = nombresDoc[tipo] || "OTRO";
+                    const seriesObj = groupedData[tipo];
+                    const seriesExistentes = Object.keys(seriesObj).sort();
 
-            # Escribir encabezados de Completas en Columna H (8), Fila 4
-            headers_comp = ["TIPO_OK", "DOC_OK", "SERIE_COMPLETA", "RANGO"]
-            for col_num_idx, header in enumerate(headers_comp, 8):
-                ws_obs.cell(row=4, column=col_num_idx, value=header)
-            
-            # Escribir datos de Completas
-            for row_idx, comp in enumerate(completos, 5):
-                for col_idx, key in enumerate(headers_comp, 8):
-                    ws_obs.cell(row=row_idx, column=col_idx, value=comp.get(key))
+                    // Validar saltos de SERIES
+                    if (seriesExistentes.length > 0) {
+                        const firstSerie = seriesExistentes[0];
+                        const prefijo = firstSerie.match(/^[A-Z]+/)?.[0] || "";
+                        const numsSeries = seriesExistentes.map(s => parseInt(s.replace(/^[A-Z]+/, "")));
 
-            wb.save(output_io)
-            
-            # --- DESCARGA AUTOMÁTICA ---
-            content_out = output_io.getvalue()
-            out_array = Uint8Array.new(len(content_out))
-            out_array.assign(content_out)
-            
-            blob = File.new([out_array], "Reporte_Final_CDC.xlsx", { "type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
-            url = URL.createObjectURL(blob)
-            
-            link = document.createElement("a")
-            link.href = url
-            link.download = "Reporte_Analizado_CDC.xlsx"
-            link.click()
-            status.innerHTML = "¡Proceso Exitoso!"
+                        const minS = Math.min(...numsSeries);
+                        const maxS = Math.max(...numsSeries);
+
+                        for (let i = minS; i <= maxS; i++) {
+                            const serieTeorica = prefijo + String(i).padStart(2, '0');
+                            if (!seriesExistentes.includes(serieTeorica)) {
+                                observaciones.push(["SERIE", tipo, descTipo, "Falta serie completa", serieTeorica, "N/A"]);
+                            }
+                        }
+                    }
+
+                    // Validar saltos de CORRELATIVOS
+                    seriesExistentes.forEach(serie => {
+                        const nums = seriesObj[serie].sort((a, b) => a - b);
+                        const minN = nums[0];
+                        const maxN = nums[nums.length - 1];
+                        const numSet = new Set(nums);
+
+                        let tieneFaltantes = false;
+                        for (let n = minN; n <= maxN; n++) {
+                            if (!numSet.has(n)) {
+                                observaciones.push(["NÚMERO", tipo, descTipo, "Falta correlativo", serie, n]);
+                                tieneFaltantes = true;
+                            }
+                        }
+
+                        if (!tieneFaltantes) {
+                            completos.push([tipo, descTipo, serie, `${minN} al ${maxN}`]);
+                        }
+                    });
+                });
+
+                // 4. Crear la nueva hoja de OBSERVACIONES
+                const wsObs = XLSX.utils.aoa_to_sheet([
+                    ["NIVEL", "TIPO", "DESCRIPCION", "DETALLE", "SERIE", "NUMERO"]
+                ]);
+
+                // Agregar datos de observaciones
+                XLSX.utils.sheet_add_aoa(wsObs, observaciones, { origin: "A2" });
+
+                // Agregar datos de completas en Columna H (8va col) Fila 4
+                XLSX.utils.sheet_add_aoa(wsObs, [["TIPO_OK", "DOC_OK", "SERIE_COMPLETA", "RANGO"]], { origin: "H4" });
+                XLSX.utils.sheet_add_aoa(wsObs, completos, { origin: "H5" });
+
+                // 5. Añadir al workbook original
+                if (workbook.SheetNames.includes("OBSERVACIONES")) {
+                    delete workbook.Sheets["OBSERVACIONES"];
+                    workbook.SheetNames = workbook.SheetNames.filter(n => n !== "OBSERVACIONES");
+                }
+                XLSX.utils.book_append_sheet(workbook, wsObs, "OBSERVACIONES");
+
+                processedWorkbook = workbook;
+                status.classList.add('hidden');
+                resultArea.classList.remove('hidden');
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        downloadBtn.addEventListener('click', () => {
+            if (processedWorkbook) {
+                XLSX.writeFile(processedWorkbook, "Reporte_Analizado_CDC.xlsx");
+            }
+        });
     </script>
 </body>
 
